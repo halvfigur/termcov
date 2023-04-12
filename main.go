@@ -1,34 +1,22 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"go/build"
 	"io/ioutil"
+	"os"
 	"path/filepath"
+	"strconv"
 
 	"golang.org/x/tools/cover"
 )
 
-func renderFile(filename string) error {
-	profiles, err := cover.ParseProfiles(filename)
-	if err != nil {
-		return err
-	}
-
-	for _, profile := range profiles {
-		actualFilename, err := findFile(profile.FileName)
-		bytes, err := ioutil.ReadFile(actualFilename)
-		if err != nil {
-			return fmt.Errorf("failed to read file %s: %v", profile.FileName, err)
-		}
-
-		if err := renderBoundaries(profile, bytes); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
+const (
+	green = "\033[32m"
+	red   = "\033[31m"
+	clear = "\033[0m"
+)
 
 func findFile(filename string) (string, error) {
 	dir, filename := filepath.Split(filename)
@@ -39,36 +27,85 @@ func findFile(filename string) (string, error) {
 	return filepath.Join(pkg.Dir, filename), nil
 }
 
-func renderBoundaries(profile *cover.Profile, bytes []byte) error {
-	fmt.Println("File:", profile.FileName)
-
-	offset := 0
-	for _, boundary := range profile.Boundaries(bytes) {
-		if boundary.Start {
-			fmt.Print(string(bytes[offset:boundary.Offset]))
-			if boundary.Count > 0 {
-				fmt.Print("\033[32m")
-			} else {
-				fmt.Print("\033[31m")
-			}
-			offset = boundary.Offset
-		} else {
-			fmt.Print(string(bytes[offset:boundary.Offset]))
-			fmt.Print("\033[0m")
-			offset = boundary.Offset
+func percentCovered(p *cover.Profile) float64 {
+	var total, covered int64
+	for _, b := range p.Blocks {
+		total += int64(b.NumStmt)
+		if b.Count > 0 {
+			covered += int64(b.NumStmt)
 		}
 	}
+	if total == 0 {
+		return 0
+	}
+	return float64(covered) / float64(total) * 100
+}
 
-	if offset < len(bytes) {
-		fmt.Print(string(bytes[offset:]))
+func renderFile(filename string) error {
+	profiles, err := cover.ParseProfiles(filename)
+	if err != nil {
+		return err
+	}
+
+	for _, profile := range profiles {
+		actualFilename, err := findFile(profile.FileName)
+		if err != nil {
+			return err
+		}
+
+		bytes, err := ioutil.ReadFile(actualFilename)
+		if err != nil {
+			return fmt.Errorf("failed to read: %q, %w", actualFilename, err)
+		}
+
+		if err := renderBoundaries(profile, bytes); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
+func renderBoundaries(profile *cover.Profile, bytes []byte) error {
+	writer := bufio.NewWriter(os.Stdout)
+
+	coveragePercent := strconv.FormatFloat(percentCovered(profile), 'f', 2, 64)
+
+	// Builder write operations always return a nil error
+	writer.WriteString("\n--- " + profile.FileName + " " + coveragePercent + "%\n")
+
+	offset := 0
+	for _, boundary := range profile.Boundaries(bytes) {
+		writer.Write(bytes[offset:boundary.Offset])
+
+		if boundary.Start {
+			if boundary.Count > 0 {
+				writer.WriteString(green)
+			} else {
+				writer.WriteString(red)
+			}
+		} else {
+			writer.WriteString(clear)
+		}
+
+		offset = boundary.Offset
+	}
+
+	if offset < len(bytes) {
+		writer.Write(bytes[offset:])
+	}
+
+	return writer.Flush()
+}
+
 func main() {
-	err := renderFile("coverage.out")
-	if err != nil {
-		panic(err)
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, "usage:", os.Args[0], "<file>")
+		os.Exit(1)
+	}
+
+	if err := renderFile(os.Args[1]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }
