@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	green = "\033[32m"
-	red   = "\033[31m"
-	clear = "\033[0m"
+	blackOnWhite = "\033[30;47m"
+	green        = "\033[32m"
+	red          = "\033[31m"
+	clear        = "\033[0m"
 )
 
 func findFile(filename string) (string, error) {
@@ -72,7 +73,7 @@ func renderBoundaries(profile *cover.Profile, bytes []byte) error {
 	coveragePercent := strconv.FormatFloat(percentCovered(profile), 'f', 2, 64)
 
 	// Builder write operations always return a nil error
-	writer.WriteString("\n--- " + profile.FileName + " " + coveragePercent + "%\n")
+	writer.WriteString("\n" + blackOnWhite + " --- " + profile.FileName + " " + coveragePercent + "%" + " --- " + clear + "\n")
 
 	offset := 0
 	for _, boundary := range profile.Boundaries(bytes) {
