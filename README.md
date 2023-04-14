@@ -12,3 +12,5 @@ go get github.com/halvfigur/termcov
 $ go test -coverprofile=coverage.out
 $ termcov coverage.out
 ```
+
+![Screenshot](screenshot.png)
