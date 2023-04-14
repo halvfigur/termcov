@@ -72,28 +72,39 @@ func renderBoundaries(profile *cover.Profile, bytes []byte) error {
 
 	coveragePercent := strconv.FormatFloat(percentCovered(profile), 'f', 2, 64)
 
-	// Builder write operations always return a nil error
-	writer.WriteString("\n" + blackOnWhite + " --- " + profile.FileName + " " + coveragePercent + "%" + " --- " + clear + "\n")
+	if _, err := writer.WriteString("\n" + blackOnWhite + " --- " + profile.FileName + " " + coveragePercent + "%" + " --- " + clear + "\n"); err != nil {
+		return err
+	}
 
 	offset := 0
 	for _, boundary := range profile.Boundaries(bytes) {
-		writer.Write(bytes[offset:boundary.Offset])
+		if _, err := writer.Write(bytes[offset:boundary.Offset]); err != nil {
+			return err
+		}
 
 		if boundary.Start {
 			if boundary.Count > 0 {
-				writer.WriteString(green)
+				if _, err := writer.WriteString(green); err != nil {
+					return err
+				}
 			} else {
-				writer.WriteString(red)
+				if _, err := writer.WriteString(red); err != nil {
+					return err
+				}
 			}
 		} else {
-			writer.WriteString(clear)
+			if _, err := writer.WriteString(clear); err != nil {
+				return err
+			}
 		}
 
 		offset = boundary.Offset
 	}
 
 	if offset < len(bytes) {
-		writer.Write(bytes[offset:])
+		if _, err := writer.Write(bytes[offset:]); err != nil {
+			return err
+		}
 	}
 
 	return writer.Flush()
